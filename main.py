@@ -14,8 +14,8 @@ import joblib
 app = FastAPI()
 
 # Constants
-SUPABASE_URL = "https://your-project-id.supabase.co"
-SUPABASE_KEY = "your-anon-or-service-key"
+SUPABASE_URL = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmYW1kcnd5cXVtYnBxYW9rZGFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM4NDAyODMsImV4cCI6MjA1OTQxNjI4M30.odsYjrOBcdiq4gPSOVm-8DpBsjLKR24yIvTaPktNo4o"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmYW1kcnd5cXVtYnBxYW9rZGFuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0Mzg0MDI4MywiZXhwIjoyMDU5NDE2MjgzfQ.Ty8ORU2qfTEZxm-pupbmWEToi1yW56ckD_Ha4ZGxWs8"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 LSTM_MODEL_FILE = "lstm_should_water.h5"
