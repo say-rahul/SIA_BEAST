@@ -14,14 +14,14 @@ import joblib
 app = FastAPI()
 
 # Constants
-SUPABASE_URL = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmYW1kcnd5cXVtYnBxYW9rZGFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM4NDAyODMsImV4cCI6MjA1OTQxNjI4M30.odsYjrOBcdiq4gPSOVm-8DpBsjLKR24yIvTaPktNo4o"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmYW1kcnd5cXVtYnBxYW9rZGFuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0Mzg0MDI4MywiZXhwIjoyMDU5NDE2MjgzfQ.Ty8ORU2qfTEZxm-pupbmWEToi1yW56ckD_Ha4ZGxWs8"
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 LSTM_MODEL_FILE = "lstm_should_water.h5"
 SEQUENCE_LENGTH = 6
 FEATURES = ['temperature', 'humidity', 'moisture', 'ldr', 'pressure', 'rain']
-WEATHER_API_KEY = "3370b2a0cc1a652422e836ec82daf9b2"
+WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 CITY = "Chengalpattu"
 COUNTRY = "Tamil Nadu"
 
