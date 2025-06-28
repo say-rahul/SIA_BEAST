@@ -1,13 +1,7 @@
-setuptools>=61.0.0
-wheel
-build
-python-dotenv
 fastapi
 uvicorn
-scikit-learn
-joblib
 requests
-supabase
-
-
-
+scikit-learn
+numpy
+python-dotenv
+httpx
