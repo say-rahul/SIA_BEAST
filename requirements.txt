@@ -1,3 +1,7 @@
+setuptools>=61.0.0
+wheel
+build
+python-dotenv
 fastapi==0.110.1
 uvicorn==0.29.0
 numpy==1.23.5
@@ -6,4 +10,4 @@ tensorflow==2.14.0
 scikit-learn==1.2.2
 joblib==1.2.0
 supabase==2.3.5
-python-dotenv==1.0.1
+
