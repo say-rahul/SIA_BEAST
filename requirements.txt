@@ -4,7 +4,7 @@ python-dotenv
 requests
 supabase
 numpy
-scikit-learn
+scikit-learn==1.7.0
 joblib
 python-multipart
 
