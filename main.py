@@ -1,7 +1,6 @@
-# Hybrid Smart Irrigation API with Threshold Logic, Live Model Learning, and Weather Awareness (Flutter Compatible)
-
 from fastapi import FastAPI, Form
 from fastapi.responses import JSONResponse
+from typing import Optional
 import uvicorn
 import os
 import numpy as np
@@ -9,16 +8,18 @@ import requests
 from datetime import datetime, timedelta
 from sklearn.linear_model import SGDClassifier
 from sklearn.preprocessing import StandardScaler
+import joblib
 
 app = FastAPI()
 
-# Constants
+# === Environment Variables ===
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 CITY = "Chengalpattu"
 COUNTRY = "Tamil Nadu"
 
+# === Config ===
 CONFIG = {
     "moisture_threshold": 30.0,
     "danger_threshold": 10.0,
@@ -32,18 +33,30 @@ CONFIG = {
     "manual_target_ml": 100
 }
 
-# Live model + scaler
-model = SGDClassifier(loss="log_loss")
+# === Live Learning Setup ===
+sgd_model = SGDClassifier(loss="log_loss")
 scaler = StandardScaler()
 X_buffer, y_buffer = [], []
-model_initialized = False
+sgd_initialized = False
+
+# === Load Pretrained Models ===
+try:
+    rf_model = joblib.load("rf_water_decision.pkl")
+    anomaly_model = joblib.load("isolation_forest.pkl")
+    models_loaded = True
+except Exception as e:
+    print("⚠️ Warning: Failed to load models:", e)
+    rf_model, anomaly_model = None, None
+    models_loaded = False
+
+# === State Variables ===
 last_signal_time = datetime.now()
 rain_detected_start = None
 last_moisture = None
 
 @app.get("/")
 def root():
-    return {"message": "🌿 Hybrid Smart Irrigation API - Threshold + Live Learning + Weather AI"}
+    return {"message": "🌿 Smart Irrigation API - Weather + ML + Threshold + Anomaly"}
 
 @app.post("/config")
 def update_config(
@@ -64,7 +77,7 @@ def update_config(
         "manual_water": manual_water,
         "manual_target_ml": manual_target_ml
     })
-    return {"message": "Config updated", "config": CONFIG}
+    return {"message": "✅ Config updated", "config": CONFIG}
 
 @app.post("/sensor-data")
 def sensor_data(
@@ -72,51 +85,74 @@ def sensor_data(
     humidity: float = Form(...),
     moisture: float = Form(...),
     ldr: float = Form(...),
-    pressure: float = Form(...),
+    pressure: Optional[float] = Form(None),  # Optional BMP280
     rain: int = Form(...),
     flame: int = Form(...),
     watered: int = Form(...),
     pir: int = Form(...),
     ultrasonic: int = Form(...)
 ):
-    global last_signal_time, rain_detected_start, last_moisture, model_initialized
+    global last_signal_time, rain_detected_start, last_moisture, sgd_initialized
 
     now = datetime.now()
     last_signal_time = now
     now_str = now.isoformat()
 
-    # Fire alert
+    # === Fire Alert ===
     if flame >= CONFIG["fire_alert_threshold"]:
         print(f"🔥 Fire detected at {now_str}")
         return JSONResponse({"alert": True, "message": "🔥 Fire detected!"})
 
-    # PIR alerts
+    # === PIR Alerts ===
     if pir >= CONFIG["human_sensitivity"] and ultrasonic >= CONFIG["human_sensitivity"]:
         print(f"👤 Human detected at {now_str}")
     elif pir >= CONFIG["rat_sensitivity"] and ultrasonic == 0:
         print(f"🐀 Rat detected at {now_str}")
 
-    # Rain duration check
+    # === Rain Monitoring ===
     if rain == 1:
         if rain_detected_start is None:
             rain_detected_start = now
         elif (now - rain_detected_start).total_seconds() >= CONFIG["rain_duration_threshold_sec"]:
             print("🌧️ Continuous rain detected")
-            return JSONResponse({"should_water": 0, "reason": "🌧️ Rain ongoing"})
+            return JSONResponse({
+                "should_water": 0,
+                "reason": "🌧️ Rain ongoing",
+                "moisture": moisture,
+                "rain_expected": True,
+                "anomaly": False,
+                "model_active": sgd_initialized
+            })
     else:
         rain_detected_start = None
 
-    # Manual watering
+    # === Manual Watering ===
     if CONFIG["manual_water"]:
         print("🚿 Manual watering triggered")
-        return JSONResponse({"should_water": 1, "reason": "Manual watering", "target_ml": CONFIG["manual_target_ml"]})
+        return JSONResponse({
+            "should_water": 1,
+            "reason": "Manual watering",
+            "target_ml": CONFIG["manual_target_ml"],
+            "moisture": moisture,
+            "rain_expected": False,
+            "anomaly": False,
+            "model_active": sgd_initialized
+        })
 
-    # Danger zone check
+    # === Danger Moisture ===
     if moisture < CONFIG["danger_threshold"]:
-        print("⚠️ Danger: Moisture critically low, watering now!")
-        return JSONResponse({"should_water": 1, "reason": "⚠️ Critical moisture level", "danger": True})
+        print("⚠️ Danger: Critically low moisture!")
+        return JSONResponse({
+            "should_water": 1,
+            "reason": "⚠️ Critical moisture level",
+            "danger": True,
+            "moisture": moisture,
+            "rain_expected": False,
+            "anomaly": False,
+            "model_active": sgd_initialized
+        })
 
-    # Weather forecast check
+    # === Weather Forecast ===
     rain_expected = False
     if CONFIG["check_weather"]:
         try:
@@ -131,50 +167,85 @@ def sensor_data(
                         rain_expected = True
                         break
         except Exception as e:
-            print("Weather check failed", e)
+            print("🌦️ Weather check failed:", e)
 
-    # Logic: combine moisture threshold and weather
+    # === Feature Vector (no BMP280) ===
+    features = np.array([[temperature, humidity, moisture, ldr, rain]])
+
+    # === Anomaly Detection ===
+    anomaly_flag = False
+    try:
+        if models_loaded:
+            anomaly_score = anomaly_model.decision_function(features)[0]
+            if anomaly_score < -0.2:
+                anomaly_flag = True
+                print("⚠️ Anomaly detected in sensor data")
+    except Exception as e:
+        print("Anomaly detection failed:", e)
+
+    # === Live Learning (SGDClassifier) ===
     should_water = 0
-    if moisture < CONFIG["moisture_threshold"] and not rain_expected:
-        should_water = 1
+    if not anomaly_flag:
+        label = 1 if (moisture < CONFIG["moisture_threshold"] and not rain_expected) else 0
+        X_buffer.append(features[0])
+        y_buffer.append(label)
 
-    # Learn from data
-    features = np.array([[temperature, humidity, moisture, ldr, pressure, rain]])
-    X_buffer.append(features[0])
-    y_buffer.append(should_water)
-
-    if len(X_buffer) >= 10:
-        X_np = np.array(X_buffer)
-        y_np = np.array(y_buffer)
-        X_scaled = scaler.fit_transform(X_np)
-        if not model_initialized:
-            model.partial_fit(X_scaled, y_np, classes=[0, 1])
-            model_initialized = True
-        else:
-            model.partial_fit(X_scaled, y_np)
-        X_buffer.clear()
-        y_buffer.clear()
-
-    if model_initialized:
-        X_test_scaled = scaler.transform(features)
-        model_pred = int(model.predict(X_test_scaled)[0])
-        print(f"🤖 Model suggests watering: {model_pred}")
-
-    # After watering check
-    if watered:
-        if last_moisture is not None:
-            if moisture > last_moisture:
-                print("✅ Moisture improved after watering")
+        if len(X_buffer) >= 10:
+            X_np = np.array(X_buffer)
+            y_np = np.array(y_buffer)
+            X_scaled = scaler.fit_transform(X_np)
+            if not sgd_initialized:
+                sgd_model.partial_fit(X_scaled, y_np, classes=[0, 1])
+                sgd_initialized = True
             else:
-                print("❌ Moisture did not improve after watering")
-        last_moisture = moisture
+                sgd_model.partial_fit(X_scaled, y_np)
+            X_buffer.clear()
+            y_buffer.clear()
+
+        if sgd_initialized:
+            X_test_scaled = scaler.transform(features)
+            live_pred = int(sgd_model.predict(X_test_scaled)[0])
+            print(f"📊 Live SGD model decision: {live_pred}")
+
+    # === Final Watering Decision ===
+    reason = "Default logic"
+    if anomaly_flag:
+        reason = "⚠️ Anomaly detected - watering disabled"
+        should_water = 0
+    elif moisture < CONFIG["moisture_threshold"] and not rain_expected:
+        if rf_model:
+            try:
+                rf_pred = int(rf_model.predict(features)[0])
+                should_water = rf_pred
+                reason = "🤖 ML model decision"
+            except Exception as e:
+                print("Random Forest failed:", e)
+                should_water = 1
+                reason = "Fallback: threshold decision"
+        else:
+            should_water = 1
+            reason = "Threshold-based decision"
+    else:
+        should_water = 0
+        reason = "No watering needed"
+
+    # === Moisture Feedback After Watering ===
+    if watered and last_moisture is not None:
+        if moisture > last_moisture:
+            print("✅ Moisture improved after watering")
+        else:
+            print("❌ Moisture did not improve")
+    last_moisture = moisture
 
     return JSONResponse({
         "should_water": should_water,
         "moisture": moisture,
-        "model_active": model_initialized,
-        "rain_expected": rain_expected
+        "model_active": sgd_initialized,
+        "rain_expected": rain_expected,
+        "anomaly": anomaly_flag,
+        "reason": reason
     })
 
+# === Run the server ===
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
