@@ -6,3 +6,5 @@ supabase
 numpy
 scikit-learn
 joblib
+python-multipart
+
