@@ -1,9 +1,8 @@
 fastapi
 uvicorn
-requests
-scikit-learn
-numpy
 python-dotenv
-httpx
-python-multipart
-
+requests
+supabase
+numpy
+scikit-learn
+joblib
