@@ -41,7 +41,7 @@ ZONE = "Sector A"
 # === Config ===
 CONFIG = {
     "moisture_threshold": 30.0,
-    "danger_threshold": 10.0,
+    "danger_threshold": 20.0,
     "fire_alert_threshold": 1,
     "check_weather": True,
     "rain_duration_threshold_sec": 120,
