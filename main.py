@@ -59,8 +59,8 @@ X_buffer, y_buffer = [], []
 sgd_initialized = False
 
 try:
-    rf_model = joblib.load("rf_water_decision.pkl")
-    anomaly_model = joblib.load("isolation_forest.pkl")
+    rf_model = joblib.load("rf_water_decision_.pkl")
+    anomaly_model = joblib.load("isolation_forest_.pkl")
     models_loaded = True
 except Exception as e:
     print("⚠️ Model loading failed:", e)
