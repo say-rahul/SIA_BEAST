@@ -101,6 +101,18 @@ def update_config(
     }).execute()
     return {"message": "✅ Config updated", "config": CONFIG}
 
+@app.post("/log_command")
+async def log_command(command: str = Form(...), source: str = Form(...), status: str = Form(...)):
+    timestamp = datetime.utcnow().isoformat()
+    supabase.table("command_logs").insert({
+        "command": command,
+        "source": source,
+        "timestamp": timestamp,
+        "status": status
+    }).execute()
+    return {"message": "Command logged"}
+
+
 @app.post("/sensor-data")
 def sensor_data(
     temperature: float = Form(...),
