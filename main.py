@@ -149,7 +149,7 @@ except ValueError:
         "humidity": humidity,
         "moisture": moisture,
         "ldr": ldr,
-        "pressure": pressure,
+        "pressure": pressure_val,
         "rain": rain,
         "flame": flame,
         "pir": pir,
