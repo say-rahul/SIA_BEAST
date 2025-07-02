@@ -158,7 +158,7 @@ def sensor_data(
     }).execute()
 
     # === Fire Detection ===
-    if flame >= CONFIG["fire_alert_threshold"]:
+    if flame < CONFIG["fire_alert_threshold"]:
         print("🔥 Fire detected!")
         send_telegram_message("🔥 Fire detected!")
         supabase.table("fire_alerts").insert({
