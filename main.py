@@ -82,6 +82,8 @@ def update_config(
     no_signal_threshold_sec: int = Form(...),
     manual_water: bool = Form(...),
     manual_target_ml: int = Form(...)
+    enable_pir: bool = Form(...),
+    enable_ultrasonic: bool = Form(...)
 ):
     CONFIG.update({
         "moisture_threshold": moisture_threshold,
@@ -91,6 +93,8 @@ def update_config(
         "no_signal_threshold_sec": no_signal_threshold_sec,
         "manual_water": manual_water,
         "manual_target_ml": manual_target_ml
+        "enable_pir": enable_pir,
+        "enable_ultrasonic": enable_ultrasonic
     })
     supabase.table("config_history").insert({
         "timestamp": datetime.now().isoformat(),
