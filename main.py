@@ -118,7 +118,6 @@ async def log_command(command: str = Form(...), source: str = Form(...), status:
     return {"message": "Command logged"}
 
 
-@app.post("/sensor-data")
 def sensor_data(
     temperature: float = Form(...),
     humidity: float = Form(...),
@@ -135,11 +134,11 @@ def sensor_data(
 
     now = datetime.now()
 
-    # Safely parse pressure from string to float (or None)
-try:
-    pressure_val = float(pressure) if pressure not in [None, ""] else None
-except ValueError:
-    pressure_val = None
+    # ✅ FIXED INDENTATION HERE
+    try:
+        pressure_val = float(pressure) if pressure not in [None, ""] else None
+    except ValueError:
+        pressure_val = None
 
 
     # Log sensor readings
