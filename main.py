@@ -357,5 +357,17 @@ def sensor_data(
 def root():
     return {"message": "🌿 Smart Irrigation API - Fully Integrated with Supabase"}
 
+
+@app.get("/commands")
+def get_commands():
+    return {
+        "manual_trigger": CONFIG["manual_water"],
+        "target_ml": CONFIG["manual_target_ml"],
+        "should_water": 1 if CONFIG["manual_water"] else 0,
+        "enable_pir": CONFIG.get("enable_pir", True),
+        "enable_ultrasonic": CONFIG.get("enable_ultrasonic", True)
+    }
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
