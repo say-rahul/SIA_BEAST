@@ -8,6 +8,7 @@ import numpy as np
 import os
 import joblib
 import requests
+from typing import Union
 from sklearn.linear_model import SGDClassifier
 from sklearn.preprocessing import StandardScaler
 
@@ -123,7 +124,7 @@ def sensor_data(
     humidity: float = Form(...),
     moisture: float = Form(...),
     ldr: float = Form(...),
-    pressure: Optional[float] = Form(None),
+    pressure: Union[str, None] = Form(None),
     rain: int = Form(...),
     flame: int = Form(...),
     watered: int = Form(...),
