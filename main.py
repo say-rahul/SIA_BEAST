@@ -117,7 +117,7 @@ async def log_command(command: str = Form(...), source: str = Form(...), status:
     }).execute()
     return {"message": "Command logged"}
 
-@app.post("/sensor_data")
+@app.post("/sensor-data")
 def sensor_data(
     temperature: float = Form(...),
     humidity: float = Form(...),
