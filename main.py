@@ -135,6 +135,13 @@ def sensor_data(
 
     now = datetime.now()
 
+    # Safely parse pressure from string to float (or None)
+try:
+    pressure_val = float(pressure) if pressure not in [None, ""] else None
+except ValueError:
+    pressure_val = None
+
+
     # Log sensor readings
     supabase.table("sensor_readings").insert({
         "timestamp": now.isoformat(),
