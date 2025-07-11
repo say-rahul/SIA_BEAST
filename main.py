@@ -123,7 +123,7 @@ def sensor_data(
     humidity: float = Form(...),
     moisture: float = Form(...),
     ldr: float = Form(...),
-    pressure: Union[str, None] = Form(None),
+    battery_voltage: Union[str, None] = Form(None),
     rain: int = Form(...),
     flame: int = Form(...),
     watered: int = Form(...),
@@ -134,11 +134,11 @@ def sensor_data(
 
     now = datetime.now()
 
-    # ✅ FIXED INDENTATION HERE
     try:
-        pressure_val = float(pressure) if pressure not in [None, ""] else None
+        battery_val = float(battery_voltage) if battery_voltage not in [None, ""] else None
     except ValueError:
-        pressure_val = None
+        battery_val = None
+
 
 
     # Log sensor readings
@@ -148,7 +148,7 @@ def sensor_data(
         "humidity": humidity,
         "moisture": moisture,
         "ldr": ldr,
-        "pressure": pressure_val,
+        "battery_voltage": battery_val,
         "rain": rain,
         "flame": flame,
         "pir": pir,
