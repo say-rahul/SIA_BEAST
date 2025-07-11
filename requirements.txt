@@ -3,6 +3,6 @@ uvicorn
 requests
 joblib
 python-dotenv
-supabase-py
+supabase
 scikit-learn
 numpy
