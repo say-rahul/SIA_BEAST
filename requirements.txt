@@ -6,3 +6,4 @@ python-dotenv
 supabase
 scikit-learn
 numpy
+python-multipart
