@@ -1,6 +1,6 @@
-from fastapi import FastAPI, Form
+from fastapi import FastAPI, Form, BackgroundTasks
 from fastapi.responses import JSONResponse
-from typing import Optional
+from typing import Optional, Union
 from supabase import create_client, Client
 from datetime import datetime, timedelta
 import uvicorn
@@ -8,8 +8,7 @@ import numpy as np
 import os
 import joblib
 import requests
-from typing import Union
-from sklearn.linear_model import SGDClassifier
+from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
 
 app = FastAPI()
@@ -50,18 +49,20 @@ CONFIG = {
     "human_sensitivity": 1,
     "no_signal_threshold_sec": 1800,
     "manual_water": False,
-    "manual_target_ml": 100
+    "manual_target_ml": 100,
+    "enable_pir": True,
+    "enable_ultrasonic": True
 }
 
 # === Models ===
-sgd_model = SGDClassifier(loss="log_loss")
+mlp_model = MLPClassifier(hidden_layer_sizes=(10, 10), warm_start=True, max_iter=1)
 scaler = StandardScaler()
 X_buffer, y_buffer = [], []
-sgd_initialized = False
+mlp_initialized = False
 
 try:
-    rf_model = joblib.load("rf_water_decision.pkl")
     anomaly_model = joblib.load("isolation_forest.pkl")
+    rf_model = joblib.load("rf_water_decision.pkl")
     models_loaded = True
 except Exception as e:
     print("⚠️ Model loading failed:", e)
@@ -74,51 +75,47 @@ last_signal_time = datetime.now()
 rain_detected_start = None
 last_moisture = None
 
-@app.post("/config")
-def update_config(
-    moisture_threshold: float = Form(...),
-    danger_threshold: float = Form(...),
-    rat_sensitivity: int = Form(...),
-    human_sensitivity: int = Form(...),
-    no_signal_threshold_sec: int = Form(...),
-    manual_water: bool = Form(...),
-    manual_target_ml: int = Form(...),
-    enable_pir: bool = Form(...),
-    enable_ultrasonic: bool = Form(...)
-):
-    CONFIG.update({
-        "moisture_threshold": moisture_threshold,
-        "danger_threshold": danger_threshold,
-        "rat_sensitivity": rat_sensitivity,
-        "human_sensitivity": human_sensitivity,
-        "no_signal_threshold_sec": no_signal_threshold_sec,
-        "manual_water": manual_water,
-        "manual_target_ml": manual_target_ml,
-        "enable_pir": enable_pir,
-        "enable_ultrasonic": enable_ultrasonic
-    })
-    supabase.table("config_history").insert({
-        "timestamp": datetime.now().isoformat(),
-        "config": CONFIG,
-        "updated_by": "server",
-        "esp32_id": ESP32_ID,
-        "zone": ZONE
-    }).execute()
-    return {"message": "✅ Config updated", "config": CONFIG}
+def log_to_supabase(table: str, data: dict):
+    try:
+        supabase.table(table).insert(data).execute()
+    except Exception as e:
+        print(f"❌ Failed to log to {table}: {e}")
 
-@app.post("/log_command")
-async def log_command(command: str = Form(...), source: str = Form(...), status: str = Form(...)):
-    timestamp = datetime.utcnow().isoformat()
-    supabase.table("command_logs").insert({
-        "command": command,
-        "source": source,
-        "timestamp": timestamp,
-        "status": status
-    }).execute()
-    return {"message": "Command logged"}
+@app.get("/waternow")
+def water_now():
+    CONFIG["manual_water"] = True
+    return {"message": "✅ Manual watering command activated"}
+
+@app.get("/stopwater")
+def stop_water():
+    CONFIG["manual_water"] = False
+    return {"message": "🛑 Manual watering stopped"} 
+
+@app.get("/enablepir")
+def enable_pir():
+    CONFIG["enable_pir"] = True
+    return {"message": "✅ PIR sensor enabled"}
+
+@app.get("/disablepir")
+def disable_pir():
+    CONFIG["enable_pir"] = False
+    return {"message": "🛑 PIR sensor disabled"}
+
+@app.get("/enableultrasonic")
+def enable_ultrasonic():
+    CONFIG["enable_ultrasonic"] = True
+    return {"message": "✅ Ultrasonic sensor enabled"}
+
+@app.get("/disableultrasonic")
+def disable_ultrasonic():
+    CONFIG["enable_ultrasonic"] = False
+    return {"message": "🛑 Ultrasonic sensor disabled"}
+
+
 
 @app.post("/sensor-data")
 def sensor_data(
+    background_tasks: BackgroundTasks,
     temperature: float = Form(...),
     humidity: float = Form(...),
     moisture: float = Form(...),
@@ -130,8 +127,7 @@ def sensor_data(
     pir: int = Form(...),
     ultrasonic: int = Form(...)
 ):
-    global last_signal_time, rain_detected_start, last_moisture, sgd_initialized
-
+    global last_signal_time, rain_detected_start, last_moisture, mlp_initialized
     now = datetime.now()
 
     try:
@@ -139,10 +135,7 @@ def sensor_data(
     except ValueError:
         battery_val = None
 
-
-
-    # Log sensor readings
-    supabase.table("sensor_readings").insert({
+    background_tasks.add_task(log_to_supabase, "sensor_readings", {
         "timestamp": now.isoformat(),
         "temperature": temperature,
         "humidity": humidity,
@@ -155,75 +148,66 @@ def sensor_data(
         "ultrasonic": ultrasonic,
         "esp32_id": ESP32_ID,
         "zone": ZONE
-    }).execute()
+    })
 
-    # === Fire Detection ===
     if flame < CONFIG["fire_alert_threshold"]:
-        print("🔥 Fire detected!")
         send_telegram_message("🔥 Fire detected!")
-        supabase.table("fire_alerts").insert({
+        background_tasks.add_task(log_to_supabase, "fire_alerts", {
             "timestamp": now.isoformat(),
             "flame_value": flame,
             "esp32_id": ESP32_ID,
             "zone": ZONE,
             "comment": "🔥 Fire sensor triggered"
-        }).execute()
+        })
         return JSONResponse({"alert": True, "message": "🔥 Fire detected!"})
 
-    # === Rat/Human Detection ===
     if pir >= CONFIG["human_sensitivity"] and ultrasonic >= CONFIG["human_sensitivity"]:
-        print("👤 Human detected")
         send_telegram_message("👤 Human detected")
-        supabase.table("human_detection").insert({
+        background_tasks.add_task(log_to_supabase, "human_detection", {
             "timestamp": now.isoformat(),
             "pir_value": pir,
             "ultrasonic_value": ultrasonic,
             "esp32_id": ESP32_ID,
             "zone": ZONE
-        }).execute()
+        })
     elif pir >= CONFIG["rat_sensitivity"] and ultrasonic == 0:
-        print("🐀 Rat detected")
         send_telegram_message("🐀 Rat detected")
-        supabase.table("rat_detection").insert({
+        background_tasks.add_task(log_to_supabase, "rat_detection", {
             "timestamp": now.isoformat(),
             "pir_value": pir,
             "ultrasonic_value": ultrasonic,
             "esp32_id": ESP32_ID,
             "zone": ZONE
-        }).execute()
+        })
 
-    # === Rain Detection ===
     rain_expected = False
     if rain == 1:
         if rain_detected_start is None:
             rain_detected_start = now
         elif (now - rain_detected_start).total_seconds() >= CONFIG["rain_duration_threshold_sec"]:
-            print("🌧️ Continuous rain logged")
             send_telegram_message("🌧️ Continuous rain logged")
-            supabase.table("rain_alerts").insert({
+            background_tasks.add_task(log_to_supabase, "rain_alerts", {
                 "timestamp": now.isoformat(),
                 "duration_sec": CONFIG["rain_duration_threshold_sec"],
                 "rain_start_time": rain_detected_start.isoformat(),
                 "rain_end_time": now.isoformat(),
                 "esp32_id": ESP32_ID,
                 "zone": ZONE
-            }).execute()
+            })
             return JSONResponse({
                 "should_water": 0,
                 "reason": "🌧️ Continuous rain",
                 "moisture": moisture,
                 "rain_expected": True,
                 "anomaly": False,
-                "model_active": sgd_initialized
+                "model_active": mlp_initialized
             })
     else:
         rain_detected_start = None
 
-    # === Manual Watering ===
     if CONFIG["manual_water"]:
-        print("🚿 Manual watering")
         send_telegram_message("🚿 Manual watering")
-        supabase.table("watering_logs").insert({
+        background_tasks.add_task(log_to_supabase, "watering_logs", {
             "timestamp": now.isoformat(),
             "target_ml": CONFIG["manual_target_ml"],
             "actual_ml": CONFIG["manual_target_ml"],
@@ -232,7 +216,7 @@ def sensor_data(
             "triggered_by": "app",
             "esp32_id": ESP32_ID,
             "zone": ZONE
-        }).execute()
+        })
         return JSONResponse({
             "should_water": 1,
             "reason": "Manual watering",
@@ -240,12 +224,10 @@ def sensor_data(
             "moisture": moisture,
             "rain_expected": False,
             "anomaly": False,
-            "model_active": sgd_initialized
+            "model_active": mlp_initialized
         })
 
-    # === Danger Moisture ===
     if moisture < CONFIG["danger_threshold"]:
-        print("⚠️ Danger: low moisture")
         send_telegram_message("⚠️ Danger: low moisture")
         return JSONResponse({
             "should_water": 1,
@@ -253,43 +235,37 @@ def sensor_data(
             "moisture": moisture,
             "rain_expected": False,
             "anomaly": False,
-            "model_active": sgd_initialized
+            "model_active": mlp_initialized
         })
 
-    # === Weather Forecast ===
     try:
         if CONFIG["check_weather"]:
             url = f"http://api.openweathermap.org/data/2.5/forecast?q={CITY},{COUNTRY}&appid={WEATHER_API_KEY}&units=metric"
             data = requests.get(url).json()
             for entry in data["list"]:
-                dt_txt = entry.get("dt_txt", "")
                 if "rain" in entry["weather"][0]["main"].lower():
                     rain_expected = True
-                    supabase.table("weather_alerts").insert({
+                    background_tasks.add_task(log_to_supabase, "weather_alerts", {
                         "timestamp": now.isoformat(),
                         "alert_type": "rain",
                         "alert_details": entry["weather"][0]["description"],
                         "esp32_id": ESP32_ID,
                         "zone": ZONE
-                    }).execute()
+                    })
                     break
     except Exception as e:
-        print("Weather check failed:", e)
         send_telegram_message(f"🌦️ Weather check failed: {e}")
 
-    # === ML Features
     features = np.array([[temperature, humidity, moisture, ldr, rain]])
     anomaly_flag = False
     try:
         if models_loaded:
             if anomaly_model.decision_function(features)[0] < -0.2:
                 anomaly_flag = True
-                print("⚠️ Anomaly detected")
                 send_telegram_message("⚠️ Anomaly detected in sensor readings")
     except:
         pass
 
-    # === Live Learning
     label = 1 if (moisture < CONFIG["moisture_threshold"] and not rain_expected) else 0
     X_buffer.append(features[0])
     y_buffer.append(label)
@@ -298,39 +274,39 @@ def sensor_data(
         X_np = np.array(X_buffer)
         y_np = np.array(y_buffer)
         X_scaled = scaler.fit_transform(X_np)
-        if not sgd_initialized:
-            sgd_model.partial_fit(X_scaled, y_np, classes=[0, 1])
-            sgd_initialized = True
+        if not mlp_initialized:
+            mlp_model.partial_fit(X_scaled, y_np, classes=[0, 1])
+            mlp_initialized = True
         else:
-            sgd_model.partial_fit(X_scaled, y_np)
+            mlp_model.partial_fit(X_scaled, y_np)
         X_buffer.clear()
         y_buffer.clear()
 
-    if sgd_initialized:
+    if mlp_initialized:
         X_scaled_test = scaler.transform(features)
-        _ = int(sgd_model.predict(X_scaled_test)[0])
+        mlp_result = int(mlp_model.predict(X_scaled_test)[0])
+        rf_result = int(rf_model.predict(features)[0]) if rf_model else 0
+    else:
+        mlp_result = rf_result = 0
 
-    # === Watering Decision
     should_water = 0
     reason = "No watering needed"
     model_type = "none"
-    model_result = 0
 
     if not anomaly_flag and moisture < CONFIG["moisture_threshold"] and not rain_expected:
-        if rf_model:
-            model_result = int(rf_model.predict(features)[0])
-            should_water = model_result
-            model_type = "RF"
-            reason = "🤖 ML model"
+        if mlp_result == rf_result:
+            should_water = mlp_result
+            model_type = "MLP + RF"
+            reason = "✅ Both models agree"
         else:
-            should_water = 1
-            reason = "Threshold"
-            model_type = "threshold"
+            should_water = mlp_result
+            model_type = "MLP only"
+            reason = "⚠️ Conflict: RF disagrees"
 
-    supabase.table("watering_decisions").insert({
+    background_tasks.add_task(log_to_supabase, "watering_decisions", {
         "timestamp": now.isoformat(),
         "should_water": bool(should_water),
-        "model_result": model_result,
+        "model_result": mlp_result,
         "model_type": model_type,
         "moisture": moisture,
         "temperature": temperature,
@@ -341,10 +317,10 @@ def sensor_data(
         "anomaly_detected": anomaly_flag,
         "esp32_id": ESP32_ID,
         "zone": ZONE
-    }).execute()
+    })
 
     if should_water:
-        supabase.table("watering_logs").insert({
+        background_tasks.add_task(log_to_supabase, "watering_logs", {
             "timestamp": now.isoformat(),
             "target_ml": 100,
             "actual_ml": 100,
@@ -353,12 +329,12 @@ def sensor_data(
             "triggered_by": "server",
             "esp32_id": ESP32_ID,
             "zone": ZONE
-        }).execute()
+        })
 
     return JSONResponse({
         "should_water": should_water,
         "moisture": moisture,
-        "model_active": sgd_initialized,
+        "model_active": mlp_initialized,
         "rain_expected": rain_expected,
         "anomaly": anomaly_flag,
         "reason": reason
@@ -366,8 +342,7 @@ def sensor_data(
 
 @app.get("/")
 def root():
-    return {"message": "🌿 Smart Irrigation API - Fully Integrated with Supabase"}
-
+    return {"message": "🌿 Smart Irrigation API - MLP Enhanced"}
 
 @app.get("/commands")
 def get_commands():
@@ -378,7 +353,6 @@ def get_commands():
         "enable_pir": CONFIG.get("enable_pir", True),
         "enable_ultrasonic": CONFIG.get("enable_ultrasonic", True)
     }
-
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
