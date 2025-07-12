@@ -149,7 +149,7 @@ def sensor_data(
     humidity: float = Form(...),
     moisture: float = Form(...),
     ldr: float = Form(...),
-    battery_voltage: Union[str, None] = Form(None),
+    battery_voltage = Form(...),
     rain: int = Form(...),
     flame: int = Form(...),
     watered: int = Form(...),
@@ -159,10 +159,6 @@ def sensor_data(
     global last_signal_time, rain_detected_start, last_moisture, mlp_initialized
     now = datetime.now()
 
-    try:
-        battery_val = float(battery_voltage) if battery_voltage not in [None, ""] else None
-    except ValueError:
-        battery_val = None
 
     background_tasks.add_task(log_to_supabase, "sensor_readings", {
         "timestamp": now.isoformat(),
@@ -170,7 +166,7 @@ def sensor_data(
         "humidity": humidity,
         "moisture": moisture,
         "ldr": ldr,
-        "battery_voltage": battery_val,
+        "battery_voltage": battery_voltage,
         "rain": rain,
         "flame": flame,
         "pir": pir,
