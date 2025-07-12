@@ -56,7 +56,7 @@ CONFIG = {
 }
 
 def is_flame_detected(flame_val: int, ldr_val: float, temp: float) -> bool:
-    return flame_val < CONFIG["fire_alert_threshold"] and ldr_val < 1000 and temp > 35.0
+    return flame_val < CONFIG["fire_alert_threshold"] and ldr_val < 1000 and temp > 70.0
 
 
 # === Models ===
