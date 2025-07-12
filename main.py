@@ -8,6 +8,7 @@ import numpy as np
 import os
 import joblib
 import requests
+from pydantic import BaseModel
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
 
@@ -69,6 +70,30 @@ except Exception as e:
     send_telegram_message(f"⚠️ Model loading failed: {e}")
     rf_model = anomaly_model = None
     models_loaded = False
+#LOG
+class CommandLog(BaseModel):
+    command: str
+    issued_by: Optional[str] = "esp32"
+    status: Optional[str] = "sent"
+    response: Optional[str] = None
+
+@app.post("/log_command")
+def log_command(cmd: CommandLog):
+    now = datetime.now().isoformat()
+    try:
+        log_to_supabase("command_logs", {
+            "timestamp": now,
+            "command": cmd.command,
+            "issued_by": cmd.issued_by,
+            "status": cmd.status,
+            "response": cmd.response,
+            "esp32_id": ESP32_ID,
+            "zone": ZONE
+        })
+        return {"message": "✅ Command log saved"}
+    except Exception as e:
+        send_telegram_message(f"❌ Command log failed: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 # === State Tracking ===
 last_signal_time = datetime.now()
