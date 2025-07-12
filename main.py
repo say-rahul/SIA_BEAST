@@ -179,18 +179,18 @@ def sensor_data(
         "zone": ZONE
     })
 
-   if is_flame_detected(flame, ldr, temperature):
+    if is_flame_detected(flame, ldr, temperature):  # ✅ fixed here
         send_telegram_message("🔥 Fire detected! (LDR + Temp Verified)")
         background_tasks.add_task(log_to_supabase, "fire_alerts", {
-        "timestamp": now.isoformat(),
-        "flame_value": flame,
-        "ldr_value": ldr,
-        "temperature": temperature,
-        "esp32_id": ESP32_ID,
-        "zone": ZONE,
-        "comment": "🔥 Verified flame detection (LDR+Temp)"
-    })
-    return JSONResponse({"alert": True, "message": "🔥 Fire detected!"})
+            "timestamp": now.isoformat(),
+            "flame_value": flame,
+            "ldr_value": ldr,
+            "temperature": temperature,
+            "esp32_id": ESP32_ID,
+            "zone": ZONE,
+            "comment": "🔥 Verified flame detection (LDR+Temp)"
+        })
+        return JSONResponse({"alert": True, "message": "🔥 Fire detected!"})
 
 
     if pir >= CONFIG["human_sensitivity"] and ultrasonic >= CONFIG["human_sensitivity"]:
