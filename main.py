@@ -149,7 +149,7 @@ def sensor_data(
     humidity: float = Form(...),
     moisture: float = Form(...),
     ldr: float = Form(...),
-    battery_voltage = Form(...),
+    battery_voltage: float = Form(...),
     rain: int = Form(...),
     flame: int = Form(...),
     watered: int = Form(...),
