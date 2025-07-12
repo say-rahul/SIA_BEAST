@@ -180,8 +180,8 @@ def sensor_data(
     })
 
    if is_flame_detected(flame, ldr, temperature):
-    send_telegram_message("🔥 Fire detected! (LDR + Temp Verified)")
-    background_tasks.add_task(log_to_supabase, "fire_alerts", {
+        send_telegram_message("🔥 Fire detected! (LDR + Temp Verified)")
+        background_tasks.add_task(log_to_supabase, "fire_alerts", {
         "timestamp": now.isoformat(),
         "flame_value": flame,
         "ldr_value": ldr,
