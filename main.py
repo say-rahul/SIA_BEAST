@@ -55,6 +55,10 @@ CONFIG = {
     "enable_ultrasonic": True
 }
 
+def is_flame_detected(flame_val: int, ldr_val: float, temp: float) -> bool:
+    return flame_val < CONFIG["fire_alert_threshold"] and ldr_val < 1000 and temp > 35.0
+
+
 # === Models ===
 mlp_model = MLPClassifier(hidden_layer_sizes=(10, 10), warm_start=True, max_iter=1)
 scaler = StandardScaler()
@@ -175,16 +179,19 @@ def sensor_data(
         "zone": ZONE
     })
 
-    if flame < CONFIG["fire_alert_threshold"]:
-        send_telegram_message("🔥 Fire detected!")
-        background_tasks.add_task(log_to_supabase, "fire_alerts", {
-            "timestamp": now.isoformat(),
-            "flame_value": flame,
-            "esp32_id": ESP32_ID,
-            "zone": ZONE,
-            "comment": "🔥 Fire sensor triggered"
-        })
-        return JSONResponse({"alert": True, "message": "🔥 Fire detected!"})
+   if is_flame_detected(flame, ldr, temperature):
+    send_telegram_message("🔥 Fire detected! (LDR + Temp Verified)")
+    background_tasks.add_task(log_to_supabase, "fire_alerts", {
+        "timestamp": now.isoformat(),
+        "flame_value": flame,
+        "ldr_value": ldr,
+        "temperature": temperature,
+        "esp32_id": ESP32_ID,
+        "zone": ZONE,
+        "comment": "🔥 Verified flame detection (LDR+Temp)"
+    })
+    return JSONResponse({"alert": True, "message": "🔥 Fire detected!"})
+
 
     if pir >= CONFIG["human_sensitivity"] and ultrasonic >= CONFIG["human_sensitivity"]:
         send_telegram_message("👤 Human detected")
