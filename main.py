@@ -12,19 +12,6 @@ from pydantic import BaseModel
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
 
-class SensorData(BaseModel):
-    temperature: float
-    humidity: float
-    moisture: float
-    ldr: float
-    battery: float
-    rain: int
-    flame: int
-    watered: int
-    pir: int
-    ultrasonic: int
-
-
 app = FastAPI()
 
 # === Telegram Notifier ===
@@ -156,21 +143,21 @@ def disable_ultrasonic():
 
 
 @app.post("/sensor-data")
-def sensor_data(background_tasks: BackgroundTasks, data: SensorData):
+def sensor_data(
+    background_tasks: BackgroundTasks,
+    temperature: float = Form(...),
+    humidity: float = Form(...),
+    moisture: float = Form(...),
+    ldr: float = Form(...),
+    battery_voltage: float = Form(...),
+    rain: int = Form(...),
+    flame: int = Form(...),
+    watered: int = Form(...),
+    pir: int = Form(...),
+    ultrasonic: int = Form(...)
+):
     global last_signal_time, rain_detected_start, last_moisture, mlp_initialized
     now = datetime.now()
-
-    # Access values as data.temperature, data.humidity, etc.
-    temperature = data.temperature
-    humidity = data.humidity
-    moisture = data.moisture
-    ldr = data.ldr
-    battery_voltage = data.battery
-    rain = data.rain
-    flame = data.flame
-    watered = data.watered
-    pir = data.pir
-    ultrasonic = data.ultrasonic
 
 
     background_tasks.add_task(log_to_supabase, "sensor_readings", {
