@@ -110,35 +110,95 @@ def log_to_supabase(table: str, data: dict):
     except Exception as e:
         print(f"❌ Failed to log to {table}: {e}")
 
-@app.get("/waternow")
-def water_now():
-    CONFIG["manual_water"] = True
-    return {"message": "✅ Manual watering command activated"}
+@app.post("/waternow") 
+def water_now(): 
+    try: 
+        log_to_supabase("device_commands", { 
+            "esp32_id": ESP32_ID, 
+            "command": "START_WATERING", 
+            "value": {"ml": 100} 
+        }) 
+        return {"message": "✅ Manual watering command logged"} 
+    except Exception as e: 
+        return JSONResponse(status_code=500, content={"error": str(e)}) 
 
-@app.get("/stopwater")
-def stop_water():
-    CONFIG["manual_water"] = False
-    return {"message": "🛑 Manual watering stopped"} 
+@app.post("/stopwater") 
+def stop_water(): 
+    try: 
+        log_to_supabase("device_commands", { 
+            "esp32_id": ESP32_ID, 
+            "command": "STOP_WATERING", 
+            "value": {} 
+        }) 
+        return {"message": "🛑 Manual watering stopped"} 
+    except Exception as e: 
+        return JSONResponse(status_code=500, content={"error": str(e)}) 
 
-@app.get("/enablepir")
-def enable_pir():
-    CONFIG["enable_pir"] = True
-    return {"message": "✅ PIR sensor enabled"}
+@app.post("/enablepir") 
+def enable_pir(): 
+    try: 
+        log_to_supabase("device_commands", { 
+            "esp32_id": ESP32_ID, 
+            "command": "ENABLE_PIR", 
+            "value": {} 
+        }) 
+        return {"message": "✅ PIR sensor enabled"} 
+    except Exception as e: 
+        return JSONResponse(status_code=500, content={"error": str(e)}) 
 
-@app.get("/disablepir")
-def disable_pir():
-    CONFIG["enable_pir"] = False
-    return {"message": "🛑 PIR sensor disabled"}
+@app.post("/disablepir") 
+def disable_pir(): 
+    try: 
+        log_to_supabase("device_commands", { 
+            "esp32_id": ESP32_ID, 
+            "command": "DISABLE_PIR", 
+            "value": {} 
+        }) 
+        return {"message": "🛑 PIR sensor disabled"} 
+    except Exception as e: 
+        return JSONResponse(status_code=500, content={"error": str(e)}) 
 
-@app.get("/enableultrasonic")
-def enable_ultrasonic():
-    CONFIG["enable_ultrasonic"] = True
-    return {"message": "✅ Ultrasonic sensor enabled"}
+@app.post("/enableultrasonic") 
+def enable_ultrasonic(): 
+    try: 
+        log_to_supabase("device_commands", { 
+            "esp32_id": ESP32_ID, 
+            "command": "ENABLE_ULTRASONIC", 
+            "value": {} 
+        }) 
+        return {"message": "✅ Ultrasonic sensor enabled"} 
+    except Exception as e: 
+        return JSONResponse(status_code=500, content={"error": str(e)}) 
 
-@app.get("/disableultrasonic")
-def disable_ultrasonic():
-    CONFIG["enable_ultrasonic"] = False
-    return {"message": "🛑 Ultrasonic sensor disabled"}
+@app.post("/disableultrasonic") 
+def disable_ultrasonic(): 
+    try: 
+        log_to_supabase("device_commands", { 
+            "esp32_id": ESP32_ID, 
+            "command": "DISABLE_ULTRASONIC", 
+            "value": {} 
+        }) 
+        return {"message": "🛑 Ultrasonic sensor disabled"} 
+    except Exception as e: 
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.get("/commands") 
+def get_latest_command(): 
+    try: 
+        # Fetch the single most recent command from the device_commands table 
+        response = supabase.table("device_commands").select("command, value").eq("esp32_id", ESP32_ID).order("timestamp", desc=True).limit(1).execute() 
+        
+        if not response.data: 
+            return {"command": "NO_COMMAND", "value": {}} 
+        
+        latest_command = response.data[0] 
+        return { 
+            "command": latest_command["command"], 
+            "value": latest_command["value"] 
+        } 
+    except Exception as e: 
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 
 
@@ -372,15 +432,7 @@ def sensor_data(
 def root():
     return {"message": "🌿 Smart Irrigation API - MLP Enhanced"}
 
-@app.get("/commands")
-def get_commands():
-    return {
-        "manual_trigger": CONFIG["manual_water"],
-        "target_ml": CONFIG["manual_target_ml"],
-        "should_water": 1 if CONFIG["manual_water"] else 0,
-        "enable_pir": CONFIG.get("enable_pir", True),
-        "enable_ultrasonic": CONFIG.get("enable_ultrasonic", True)
-    }
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
