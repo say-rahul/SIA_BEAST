@@ -182,21 +182,23 @@ def disable_ultrasonic():
     except Exception as e: 
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-@app.get("/commands") 
-def get_latest_command(): 
-    try: 
-        # Fetch the single most recent command from the device_commands table 
-        response = supabase.table("device_commands").select("command, value").eq("esp32_id", ESP32_ID).order("timestamp", desc=True).limit(1).execute() 
-        
-        if not response.data: 
-            return {"command": "NO_COMMAND", "value": {}} 
-        
-        latest_command = response.data[0] 
-        return { 
-            "command": latest_command["command"], 
-            "value": latest_command["value"] 
-        } 
-    except Exception as e: 
+@app.get("/commands")
+def get_latest_command(last_id: Optional[int] = 0):
+    try:
+        # Fetch the single most recent command from the device_commands table
+        # where the ID is greater than the last processed ID
+        response = supabase.table("device_commands").select("id, command, value").eq("esp32_id", ESP32_ID).gt("id", last_id).order("id", desc=True).limit(1).execute()
+
+        if not response.data:
+            return {"command": "NO_COMMAND", "value": {}}
+
+        latest_command = response.data[0]
+        return {
+            "id": latest_command["id"],
+            "command": latest_command["command"],
+            "value": latest_command["value"]
+        }
+    except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
